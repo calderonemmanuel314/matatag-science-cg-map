@@ -1,5 +1,9 @@
 # DepEd Science Curriculum Knowledge Graph — Source Code
 
+**[Live Interactive Map](https://calderonemmanuel314.github.io/matatag-science-cg-map/)**
+
+A semantic, interactive visualization of the Philippine DepEd MATATAG Science Curriculum (Grades 3-10). Designed to help educators visualize vertical spiral progression and horizontal cross-discipline integration to better scaffold conceptual delivery.
+
 ## What's here
 
 ### `kg_pipeline/` — Python data pipeline
@@ -36,9 +40,7 @@ the others):
 cd kg_pipeline
 python3 assemble.py
 ```
-Output files are written to `/mnt/user-data/outputs/` — change the paths
-at the bottom of `assemble.py` if you're running this outside that
-environment.
+Output JSON files are written to the root directory (../). If you modify the pipeline, ensure your output paths in assemble.py map correctly to your local environment.
 
 **Tuning knobs**, if you want to regenerate with different sensitivity:
 - `build_edges.py` → `STOPWORDS` set and `MIN_KEYWORD_LEN` control what
@@ -49,13 +51,10 @@ environment.
 - `generate_cross_strand_edges(lcs, min_overlap=3)` — cross-strand
   threshold
 
-### `kg_visualization_template.html` — the visualization, pre-data-injection
-This is the actual page source: D3 force-directed graph, grade/quarter
-timeline layout, strand color-coding, side panel, filters. It contains a
-placeholder, `__DATA_PLACEHOLDER__`, where the graph JSON gets substituted
-in before publishing — the file as published to you (`deped_science_kg.html`)
-has the full ~325-node dataset already embedded in place of that
-placeholder, which is why it's a much larger file.
+**To rebuild the final page yourself** after regenerating the data:
+Simply run the included stitching script from your terminal:
+```bash
+python3 stitch.py
 
 **To rebuild the final page yourself** after regenerating the data:
 ```python
@@ -93,3 +92,8 @@ open("deped_science_kg.html", "w").write(html)
   matters for your use case.
 - No automated tests beyond the referential-integrity validation in
   `assemble.py`.
+
+## Credits & AI Transparency
+This project was conceptualized and directed by a pre-service physics educator to explore better ways of visualizing pedagogical scaffolding. 
+* **Claude** assisted in writing the initial Python semantic mapping pipeline (`kg_pipeline`).
+* **Gemini** assisted in debugging the local environment, refining the D3.js UI (clipping fixes, search bar implementation), and deploying to GitHub Pages.
