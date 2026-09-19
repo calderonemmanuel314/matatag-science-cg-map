@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DepEd Science Curriculum — Knowledge Graph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #12181f;
+    --bg-panel: #171e26;
+    --bg-panel-raised: #1d2530;
+    --ink: #e8e6df;
+    --ink-dim: #a5aab3;
+    --ink-faint: #6b7280;
+    --line: #2a333f;
+    --line-soft: #202832;
+
+    --matter: #d9a441;
+    --matter-dim: #7a6535;
+    --living: #6ea672;
+    --living-dim: #45593f;
+    --force: #5b96db;
+    --force-dim: #3a5878;
+    --earth: #c1683b;
+    --earth-dim: #6e4530;
+
+    --radius-sm: 3px;
+    --radius-md: 6px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, sans-serif;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  h1, h2, h3, .serif {
+    font-family: 'Fraunces', Georgia, serif;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* ---------------- HEADER ---------------- */
+  header {
+    padding: 18px 28px 14px 28px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  header .subtitle {
+    font-size: 13px;
+    color: var(--ink-dim);
+    margin-top: 3px;
+  }
+
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  #search-input {
+    background: var(--bg-panel-raised);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    width: 260px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  
+  #search-input:focus {
+    border-color: var(--ink-dim);
+  }
+
+  #search-input::placeholder {
+    color: var(--ink-faint);
+  }
+
+  .strand-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--ink-dim);
+  }
+
+  .strand-legend .item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 3px 8px 3px 4px;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+  }
+  .strand-legend .item:hover { background: var(--bg-panel-raised); }
+  .strand-legend .item.dimmed { opacity: 0.35; }
+
+  .strand-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ---------------- GRADE TIMELINE ---------------- */
+  #grade-strip {
+    display: flex;
+    padding: 12px 28px 0 28px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+    gap: 2px;
+    overflow-x: auto;
+  }
+
+  .grade-tab {
+    flex: 1;
+    min-width: 84px;
+    text-align: center;
+    padding: 9px 4px 11px 4px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--ink-dim);
+    font-family: 'Inter', sans-serif;
+    font-size: 12.5px;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .grade-tab:hover { color: var(--ink); }
+  .grade-tab.active {
+    color: var(--ink);
+    border-bottom-color: var(--force);
+  }
+  .grade-tab .n {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    font-weight: 600;
+    display: block;
+  }
+
+  /* ---------------- MAIN ---------------- */
+  #main {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+  }
+
+  #graph-container {
+    flex: 1;
+    position: relative;
+  }
+
+  svg { 
+    display: block; 
+    width: 100%; 
+    height: 100%; 
+    cursor: grab; 
+    overflow: visible !important; 
+  }
+  svg:active { cursor: grabbing; }
+
+  .node-cs circle {
+    stroke: var(--bg);
+    stroke-width: 2px;
+  }
+  .node-lc circle {
+    stroke: var(--bg);
+    stroke-width: 1.5px;
+  }
+
+  .node-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 9.5px;
+    fill: var(--ink-dim);
+    pointer-events: none;
+    user-select: none;
+  }
+  .node-label.cs-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    fill: var(--ink);
+  }
+
+  .link {
+    fill: none;
+    stroke-linecap: round;
+  }
+  .link-horizontal {
+    stroke-dasharray: none;
+  }
+  .link-vertical {
+    stroke-dasharray: none;
+  }
+
+  .node.faded circle { opacity: 0.12; }
+  .node.faded .node-label { opacity: 0.08; }
+  .link.faded { opacity: 0.05; }
+  .node.highlighted circle { stroke: var(--ink); stroke-width: 2.5px; }
+
+  /* ---------------- SIDE PANEL ---------------- */
+  #side-panel {
+    width: 360px;
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border-left: 1px solid var(--line);
+    padding: 24px 22px;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    position: relative;
+  }
+  #side-panel.open { transform: translateX(0); }
+
+  @media (max-width: 720px) {
+    #side-panel {
+      position: absolute;
+      right: 0; top: 0; bottom: 0;
+      width: min(86vw, 360px);
+      box-shadow: -12px 0 24px rgba(0,0,0,0.3);
+      z-index: 20;
+    }
+  }
+
+  .panel-close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: none;
+    border: none;
+    color: var(--ink-faint);
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px;
+  }
+  .panel-close:hover { color: var(--ink); }
+
+  .panel-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin-bottom: 8px;
+  }
+
+  .panel-title {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.35;
+    margin: 0 0 14px 0;
+    padding-right: 24px;
+  }
+
+  .panel-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .pill {
+    font-size: 10.5px;
+    padding: 3px 9px;
+    border-radius: 100px;
+    background: var(--bg-panel-raised);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+  }
+
+  .panel-fulltext {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink-dim);
+    margin-bottom: 22px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .conn-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-faint);
+    margin: 18px 0 8px 0;
+  }
+
+  .conn-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line-soft);
+    cursor: pointer;
+  }
+  .conn-item:hover .conn-label { color: var(--ink); }
+
+  .conn-arrow {
+    font-size: 13px;
+    color: var(--ink-faint);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .conn-label {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--ink-dim);
+    transition: color 0.15s;
+  }
+  .conn-grade-tag {
+    font-size: 10px;
+    color: var(--ink-faint);
+    margin-right: 6px;
+  }
+
+  .empty-state {
+    color: var(--ink-faint);
+    font-size: 13px;
+    line-height: 1.6;
+    padding-top: 40px;
+    text-align: center;
+  }
+  .empty-state .serif { font-size: 16px; display: block; margin-bottom: 8px; color: var(--ink-dim); }
+
+  /* ---------------- LEGEND / HELP FOOTER ---------------- */
+  #hint-bar {
+    position: absolute;
+    bottom: 16px;
+    left: 28px;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    display: flex;
+    gap: 18px;
+    pointer-events: none;
+  }
+  #hint-bar .dot { opacity: 0.5; }
+
+  #node-count {
+    position: absolute;
+    top: 14px;
+    left: 24px;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+  }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #side-panel { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="header-row">
+      <div>
+        <h1>DepEd Science Curriculum — Knowledge Graph</h1>
+        <div class="subtitle">Vertical &amp; horizontal concept mapping across Grades 3&ndash;10 · MATATAG Curriculum Guide</div>
+      </div>
+      <div class="header-controls">
+        <input type="text" id="search-input" placeholder="Search concepts, keywords..." autocomplete="off">
+        <div class="strand-legend" id="strand-legend"></div>
+      </div>
+    </div>
+  </header>
+
+  <div id="grade-strip"></div>
+
+  <div id="main">
+    <div id="graph-container">
+      <svg id="graph"></svg>
+      <div id="node-count"></div>
+      <div id="hint-bar">
+        <span><span class="dot">●</span> drag to pan · scroll to zoom</span>
+        <span><span class="dot">●</span> click a node for details</span>
+        <span><span class="dot">●</span> solid = vertical · dashed = horizontal · dotted white = cross-strand</span>
+      </div>
+    </div>
+
+    <div id="side-panel">
+      <button class="panel-close" id="panel-close">&times;</button>
+      <div id="panel-content">
+        <div class="empty-state">
+          <span class="serif">No concept selected</span>
+          Click any node in the graph to see its full competency text and connections.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const RAW_DATA = __DATA_PLACEHOLDER__;
+
+// ---------------------------------------------------------------- SETUP
+const STRAND_META = {
+  MATTER: { label: "Materials / Science of Materials", color: "#d9a441", dim: "#7a6535" },
+  LIVING: { label: "Living Things / Life Science", color: "#6ea672", dim: "#45593f" },
+  FORCE:  { label: "Force, Motion & Energy", color: "#5b96db", dim: "#3a5878" },
+  EARTH:  { label: "Earth & Space Science", color: "#c1683b", dim: "#6e4530" },
+};
+
+function strandCodeFromId(id) {
+  const parts = id.split("-");
+  return parts[parts.length - 1];
+}
+
+const nodes = RAW_DATA.nodes.map(n => ({
+  ...n,
+  strandCode: strandCodeFromId(n.id),
+}));
+const nodeById = new Map(nodes.map(n => [n.id, n]));
+
+const links = RAW_DATA.edges.map(e => ({
+  ...e,
+  source: e.source,
+  target: e.target,
+}));
+
+const grades = [...new Set(nodes.map(n => n.grade))].sort((a,b) => a-b);
+
+// ---------------------------------------------------------------- FILTER STATE
+const activeStrands = new Set(Object.keys(STRAND_META));
+let activeGrade = "all";
+let searchQuery = "";
+
+// ---------------------------------------------------------------- SEARCH
+document.getElementById("search-input").addEventListener("input", (e) => {
+  searchQuery = e.target.value.trim().toLowerCase();
+  applyFilters();
+});
+
+// ---------------------------------------------------------------- LEGEND
+const legendEl = document.getElementById("strand-legend");
+
+function renderLegend() {
+  legendEl.innerHTML = "";
+  Object.entries(STRAND_META).forEach(([code, meta]) => {
+    const item = document.createElement("div");
+    item.className = "item" + (activeStrands.has(code) ? "" : " dimmed");
+    item.innerHTML = `<span class="strand-dot" style="background:${meta.color}"></span>${meta.label}`;
+    item.addEventListener("click", () => {
+      if (activeStrands.has(code)) {
+        if (activeStrands.size > 1) activeStrands.delete(code);
+      } else {
+        activeStrands.add(code);
+      }
+      renderLegend();
+      applyFilters();
+    });
+    legendEl.appendChild(item);
+  });
+}
+renderLegend();
+
+// ---------------------------------------------------------------- GRADE STRIP
+const gradeStrip = document.getElementById("grade-strip");
+
+function renderGradeStrip() {
+  gradeStrip.innerHTML = "";
+  const allTab = document.createElement("button");
+  allTab.className = "grade-tab" + (activeGrade === "all" ? " active" : "");
+  allTab.innerHTML = `<span class="n">All</span>Grades`;
+  allTab.addEventListener("click", () => { activeGrade = "all"; renderGradeStrip(); applyFilters(); });
+  gradeStrip.appendChild(allTab);
+
+  grades.forEach(g => {
+    const tab = document.createElement("button");
+    tab.className = "grade-tab" + (activeGrade === g ? " active" : "");
+    const level = g <= 6 ? "Elem." : "JHS";
+    tab.innerHTML = `<span class="n">${g}</span>${level}`;
+    tab.addEventListener("click", () => { activeGrade = g; renderGradeStrip(); applyFilters(); });
+    gradeStrip.appendChild(tab);
+  });
+}
+renderGradeStrip();
+
+// ---------------------------------------------------------------- SVG / ZOOM
+const svg = d3.select("#graph");
+const container = document.getElementById("graph-container");
+let width = container.clientWidth;
+let height = container.clientHeight;
+
+const g = svg.append("g");
+
+const zoom = d3.zoom()
+  .scaleExtent([0.15, 4])
+  .on("zoom", (event) => { g.attr("transform", event.transform); });
+svg.call(zoom);
+
+const linkGroup = g.append("g").attr("class", "links");
+const nodeGroup = g.append("g").attr("class", "nodes");
+const axisGroup = g.append("g").attr("class", "axis-backdrop");
+
+// ---------------------------------------------------------------- SCALES
+const gradeExtent = d3.extent(grades);
+const gradeBandWidth = 210;
+const xScale = d3.scaleLinear()
+  .domain([gradeExtent[0], gradeExtent[1]])
+  .range([120, 120 + (gradeExtent[1] - gradeExtent[0]) * gradeBandWidth]);
+
+function xForNode(n) {
+  const base = xScale(n.grade);
+  const qOffset = (n.quarter - 2.5) * (gradeBandWidth / 4.4);
+  return base + qOffset;
+}
+
+function nodeRadius(n) {
+  return n.type === "content_standard" ? 9 : 4.5;
+}
+
+function nodeColor(n) {
+  const meta = STRAND_META[n.strandCode];
+  return meta ? meta.color : "#888";
+}
+
+// ---------------------------------------------------------------- GRADE/QUARTER BACKDROP
+function renderAxisBackdrop() {
+  axisGroup.selectAll("*").remove();
+  grades.forEach(gr => {
+    const bx = xScale(gr);
+    axisGroup.append("text")
+      .attr("x", bx)
+      .attr("y", 26)
+      .attr("text-anchor", "middle")
+      .attr("fill", "#3a4552")
+      .attr("font-family", "Fraunces, serif")
+      .attr("font-size", 13)
+      .attr("font-weight", 600)
+      .text(`Grade ${gr}`);
+    [1,2,3,4].forEach(q => {
+      const qx = bx + (q - 2.5) * (gradeBandWidth / 4.4);
+      axisGroup.append("text")
+        .attr("x", qx)
+        .attr("y", 42)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#2e3742")
+        .attr("font-family", "Inter, sans-serif")
+        .attr("font-size", 9.5)
+        .text(`Q${q}`);
+    });
+    if (gr !== grades[grades.length - 1]) {
+      const dividerX = (bx + xScale(gr + 1)) / 2;
+      axisGroup.append("line")
+        .attr("x1", dividerX).attr("x2", dividerX)
+        .attr("y1", 60).attr("y2", height * 2)
+        .attr("stroke", "#1c232c")
+        .attr("stroke-width", 1);
+    }
+  });
+}
+renderAxisBackdrop();
+
+// ---------------------------------------------------------------- SIMULATION
+const simulation = d3.forceSimulation(nodes)
+  .force("x", d3.forceX(d => xForNode(d)).strength(0.55))
+  .force("y", d3.forceY(d => {
+    const strandOffset = { MATTER: -180, LIVING: -60, FORCE: 60, EARTH: 180 };
+    return height / 2 + (strandOffset[d.strandCode] || 0);
+  }).strength(0.22))
+  .force("collide", d3.forceCollide(d => nodeRadius(d) + 4))
+  .force("charge", d3.forceManyBody().strength(-14))
+  .force("link", d3.forceLink(links)
+    .id(d => d.id)
+    .distance(d => {
+      if (d.connection_type === "vertical") return 70;
+      if (d.connection_type === "cross_strand") return 160;
+      return 22;
+    })
+    .strength(d => {
+      if (d.connection_type === "vertical") return 0.08;
+      if (d.connection_type === "cross_strand") return 0.03;
+      return 0.18;
+    })
+  )
+  .alphaDecay(0.025);
+
+// ---------------------------------------------------------------- RENDER LINKS
+const linkSel = linkGroup.selectAll("line")
+  .data(links)
+  .join("line")
+  .attr("class", d => "link link-" + d.connection_type.replace("_", "-"))
+  .attr("stroke", d => {
+    if (d.connection_type === "cross_strand") return "#e8e6df";
+    const s = nodeById.get(d.source.id || d.source);
+    const meta = s ? STRAND_META[s.strandCode] : null;
+    return meta ? meta.dim : "#333";
+  })
+  .attr("stroke-width", d => {
+    if (d.connection_type === "cross_strand") return 1.6;
+    return d.connection_type === "vertical" ? 1.1 : 0.7;
+  })
+  .attr("stroke-opacity", d => {
+    if (d.connection_type === "cross_strand") return 0.5;
+    return d.connection_type === "vertical" ? 0.55 : 0.35;
+  })
+  .attr("stroke-dasharray", d => {
+    if (d.connection_type === "horizontal") return "2,2";
+    if (d.connection_type === "cross_strand") return "6,3";
+    return null;
+  });
+
+// ---------------------------------------------------------------- RENDER NODES
+const nodeSel = nodeGroup.selectAll("g.node")
+  .data(nodes)
+  .join("g")
+  .attr("class", d => "node " + (d.type === "content_standard" ? "node-cs" : "node-lc"))
+  .style("cursor", "pointer")
+  .call(d3.drag()
+    .on("start", dragStart)
+    .on("drag", dragged)
+    .on("end", dragEnd));
+
+nodeSel.append("circle")
+  .attr("r", nodeRadius)
+  .attr("fill", nodeColor)
+  .attr("fill-opacity", d => d.type === "content_standard" ? 0.95 : 0.8);
+
+nodeSel.filter(d => d.type === "content_standard")
+  .append("text")
+  .attr("class", "node-label cs-label")
+  .attr("x", 13)
+  .attr("y", 4)
+  .text(d => d.label.length > 26 ? d.label.slice(0, 25) + "\u2026" : d.label);
+
+nodeSel.on("click", (event, d) => {
+  event.stopPropagation();
+  selectNode(d);
+});
+
+svg.on("click", () => closePanel());
+
+// ---------------------------------------------------------------- TICK
+simulation.on("tick", () => {
+  linkSel
+    .attr("x1", d => d.source.x)
+    .attr("y1", d => d.source.y)
+    .attr("x2", d => d.target.x)
+    .attr("y2", d => d.target.y);
+
+  nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
+});
+
+function dragStart(event, d) {
+  if (!event.active) simulation.alphaTarget(0.15).restart();
+  d.fx = d.x; d.fy = d.y;
+}
+function dragged(event, d) {
+  d.fx = event.x; d.fy = event.y;
+}
+function dragEnd(event, d) {
+  if (!event.active) simulation.alphaTarget(0);
+  d.fx = null; d.fy = null;
+}
+
+// ---------------------------------------------------------------- APPLY FILTERS
+function applyFilters() {
+  nodeSel.classed("faded", d => {
+    const strandOk = activeStrands.has(d.strandCode);
+    const gradeOk = activeGrade === "all" || d.grade === activeGrade;
+    let searchOk = true;
+    
+    if (searchQuery) {
+      searchOk = d.id.toLowerCase().includes(searchQuery) ||
+                 d.label.toLowerCase().includes(searchQuery) ||
+                 (d.full_text && d.full_text.toLowerCase().includes(searchQuery));
+    }
+    
+    return !(strandOk && gradeOk && searchOk);
+  });
+  
+  linkSel.classed("faded", d => {
+    const s = nodeById.get(d.source.id || d.source);
+    const t = nodeById.get(d.target.id || d.target);
+    const strandOk = activeStrands.has(s.strandCode) && activeStrands.has(t.strandCode);
+    const gradeOk = activeGrade === "all" || (s.grade === activeGrade || t.grade === activeGrade);
+    
+    let searchOk = true;
+    if (searchQuery) {
+       // Keep the link visible only if BOTH connected nodes match the search query
+       const sMatch = s.id.toLowerCase().includes(searchQuery) || 
+                      s.label.toLowerCase().includes(searchQuery) || 
+                      (s.full_text && s.full_text.toLowerCase().includes(searchQuery));
+       const tMatch = t.id.toLowerCase().includes(searchQuery) || 
+                      t.label.toLowerCase().includes(searchQuery) || 
+                      (t.full_text && t.full_text.toLowerCase().includes(searchQuery));
+       searchOk = sMatch && tMatch;
+    }
+
+    return !(strandOk && gradeOk && searchOk);
+  });
+
+  const visibleCount = nodes.filter(d => {
+    const strandOk = activeStrands.has(d.strandCode);
+    const gradeOk = activeGrade === "all" || d.grade === activeGrade;
+    let searchOk = true;
+    if (searchQuery) {
+      searchOk = d.id.toLowerCase().includes(searchQuery) ||
+                 d.label.toLowerCase().includes(searchQuery) ||
+                 (d.full_text && d.full_text.toLowerCase().includes(searchQuery));
+    }
+    return strandOk && gradeOk && searchOk;
+  }).length;
+  
+  document.getElementById("node-count").textContent = `${visibleCount} of ${nodes.length} concepts shown`;
+}
+applyFilters();
+
+// ---------------------------------------------------------------- SIDE PANEL
+const panel = document.getElementById("side-panel");
+const panelContent = document.getElementById("panel-content");
+let highlightedId = null;
+
+function closePanel() {
+  panel.classList.remove("open");
+  highlightedId = null;
+  nodeSel.classed("highlighted", false);
+}
+document.getElementById("panel-close").addEventListener("click", closePanel);
+
+function connectedEdgesFor(id) {
+  return links.filter(l => (l.source.id || l.source) === id || (l.target.id || l.target) === id);
+}
+
+function otherEndId(link, id) {
+  const s = link.source.id || link.source;
+  const t = link.target.id || link.target;
+  return s === id ? t : s;
+}
+
+function selectNode(d) {
+  highlightedId = d.id;
+  nodeSel.classed("highlighted", n => n.id === d.id);
+
+  const meta = STRAND_META[d.strandCode];
+  const isCS = d.type === "content_standard";
+  const edges = connectedEdgesFor(d.id);
+  const vertical = edges.filter(e => e.connection_type === "vertical");
+  const horizontal = edges.filter(e => e.connection_type === "horizontal");
+  const crossStrand = edges.filter(e => e.connection_type === "cross_strand");
+
+  function connList(list, label) {
+    if (list.length === 0) return "";
+    const items = list.map(e => {
+      const otherId = otherEndId(e, d.id);
+      const other = nodeById.get(otherId);
+      if (!other) return "";
+      const isSource = (e.source.id || e.source) === d.id;
+      const arrow = e.connection_type === "vertical" ? (isSource ? "\u2192" : "\u2190") : "\u2194";
+      return `<div class="conn-item" data-nodeid="${otherId}">
+        <span class="conn-arrow">${arrow}</span>
+        <span class="conn-label"><span class="conn-grade-tag">G${other.grade}</span>${other.label}</span>
+      </div>`;
+    }).join("");
+    return `<div class="conn-section-title">${label} (${list.length})</div>${items}`;
+  }
+
+  panelContent.innerHTML = `
+    <div class="panel-eyebrow" style="color:${meta.color}">${meta.label}</div>
+    <h2 class="panel-title">${d.label}</h2>
+    <div class="panel-meta">
+      <span class="pill">Grade ${d.grade} · Q${d.quarter}</span>
+      <span class="pill">${isCS ? "Content Standard" : "Learning Competency"}</span>
+      ${d.bloom_level ? `<span class="pill">${d.bloom_level}</span>` : ""}
+    </div>
+    <div class="panel-fulltext">${d.full_text}</div>
+    ${connList(vertical, "Vertical connections")}
+    ${connList(horizontal, "Horizontal connections")}
+    ${connList(crossStrand, "Cross-strand connections")}
+    ${edges.length === 0 ? '<div class="empty-state" style="padding-top:10px">No mapped connections for this node yet.</div>' : ""}
+  `;
+
+  panelContent.querySelectorAll(".conn-item").forEach(el => {
+    el.addEventListener("click", () => {
+      const otherNode = nodeById.get(el.dataset.nodeid);
+      if (otherNode) selectNode(otherNode);
+    });
+  });
+
+  panel.classList.add("open");
+}
+
+// ---------------------------------------------------------------- RESIZE
+window.addEventListener("resize", () => {
+  width = container.clientWidth;
+  height = container.clientHeight;
+  simulation.alpha(0.3).restart();
+});
+
+// initial gentle zoom-to-fit after layout settles
+setTimeout(() => {
+  const totalWidth = xScale(gradeExtent[1]) - xScale(gradeExtent[0]) + 300;
+  const fitScale = Math.min(1, width / totalWidth) * 0.92;
+  svg.call(zoom.transform, d3.zoomIdentity.translate(width * 0.06, height * 0.12).scale(Math.max(0.3, fitScale)));
+}, 500);
+</script>
+
+</body>
+</html>
